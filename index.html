@@ -395,6 +395,14 @@ const decrisErreur = e => !e ? 'erreur vide (rejet non standard du navigateur)'
 
 async function connecterFtms(){
   if (!navigator.bluetooth){ journal('Web Bluetooth absent de ce navigateur','err'); return; }
+  // Diagnostic : la radio Bluetooth est-elle accessible à ce navigateur ?
+  if (navigator.bluetooth.getAvailability){
+    try{
+      const dispo = await navigator.bluetooth.getAvailability();
+      journal('Radio Bluetooth accessible : '+(dispo?'oui':'NON'), dispo?'ok':'err');
+      if (!dispo) journal('→ Bluetooth coupé, ou autorisation Bluetooth refusée à cette app (Réglages iPad → Confidentialité → Bluetooth)','err');
+    } catch(e){ journal('getAvailability impossible : '+decrisErreur(e)); }
+  }
   // 1) Recherche filtrée par service FTMS (la voie standard, Chrome/Edge)
   try{
     journal('Recherche filtrée (service FTMS 0x1826)…');
@@ -601,8 +609,17 @@ $('simBruit').oninput = e=>$('simBruitVal').textContent='±'+e.target.value+' s'
 
 if (!navigator.bluetooth){
   const b=$('banniere'); b.style.display='block';
-  b.innerHTML = '<b>Web Bluetooth indisponible ici.</b> Ouvre cette page via <code>http://localhost</code> ou HTTPS dans Chrome/Edge. Le simulateur et le replay fonctionnent quand même.';
+  b.innerHTML = '<b>Web Bluetooth indisponible ici.</b> Ouvre cette page via <code>http://localhost</code> ou HTTPS dans Chrome/Edge (ou Bluefy sur iPad). Le simulateur et le replay fonctionnent quand même.';
   $('btnFtms').disabled=true; $('btnHr').disabled=true;
+}
+
+/* Diagnostic d'environnement au chargement — utile pour le débogage à distance */
+journal('Navigateur : '+navigator.userAgent);
+journal('Web Bluetooth : '+(navigator.bluetooth?'présent':'ABSENT'), navigator.bluetooth?'ok':'err');
+if (navigator.bluetooth && navigator.bluetooth.getAvailability){
+  navigator.bluetooth.getAvailability().then(d=>{
+    journal('Radio Bluetooth accessible : '+(d?'oui ✔':'NON — autoriser le Bluetooth pour Bluefy dans Réglages, vérifier que le Bluetooth de l\'iPad est activé, puis forcer la fermeture de Bluefy et rouvrir'), d?'ok':'err');
+  }).catch(()=>{});
 }
 </script>
 </body>
