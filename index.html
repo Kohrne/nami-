@@ -160,9 +160,12 @@
 
 <script>
 'use strict';
-/* ===================== Constantes BLE ===================== */
-const SVC_FTMS = 0x1826, CHR_ROWER = 0x2ad1;
-const SVC_HR = 0x180d, CHR_HRM = 0x2a37;
+/* ===================== Constantes BLE =====================
+   UUID en forme 128 bits canonique : Chrome accepte aussi les formes
+   courtes (0x1826), mais Bluefy (iPad) rejette ces dernières. */
+const UUID16 = n => `0000${n.toString(16).padStart(4,'0')}-0000-1000-8000-00805f9b34fb`;
+const SVC_FTMS = UUID16(0x1826), CHR_ROWER = UUID16(0x2ad1);
+const SVC_HR = UUID16(0x180d), CHR_HRM = UUID16(0x2a37);
 
 /* ===================== Décodage FTMS Rower Data (0x2AD1) =====================
    Spec FTMS v1.0 §4.8. Piège : bit 0 « More Data » en logique inversée
