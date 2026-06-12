@@ -390,30 +390,67 @@ requestAnimationFrame(dessineGraphe);
 
 /* ===================== Connexions BLE ===================== */
 let devFtms=null, devHr=null;
+const decrisErreur = e => !e ? 'erreur vide (rejet non standard du navigateur)'
+  : (e.name ? e.name+' — ' : '') + (e.message || String(e));
+
 async function connecterFtms(){
+  if (!navigator.bluetooth){ journal('Web Bluetooth absent de ce navigateur','err'); return; }
+  // 1) Recherche filtrée par service FTMS (la voie standard, Chrome/Edge)
   try{
+    journal('Recherche filtrée (service FTMS 0x1826)…');
     devFtms = await navigator.bluetooth.requestDevice({
       filters:[{services:[SVC_FTMS]}], optionalServices:[SVC_FTMS] });
+  } catch(e1){
+    if (e1 && /cancel|annul/i.test(e1.message||'')){ journal('Sélection annulée'); return; }
+    journal('Recherche filtrée échouée ('+decrisErreur(e1)+') → repli : scan de TOUS les appareils BLE');
+    // 2) Repli Bluefy : scan large, choisir le rameur dans la liste
+    try{
+      devFtms = await navigator.bluetooth.requestDevice({
+        acceptAllDevices:true, optionalServices:[SVC_FTMS] });
+    } catch(e2){
+      if (e2 && /cancel|annul/i.test(e2.message||'')){ journal('Sélection annulée'); return; }
+      journal('Connexion rameur : '+decrisErreur(e2),'err'); return;
+    }
+  }
+  // 3) Connexion GATT et abonnement, étape par étape
+  try{
     journal(`Appareil choisi : ${devFtms.name||'(sans nom)'}`,'ok');
     devFtms.addEventListener('gattserverdisconnected',()=>{
       journal('⚠ Rameur DÉCONNECTÉ (événement gattserverdisconnected)','err');
       $('puceFtms').textContent='rameur : déconnecté'; $('puceFtms').className='puce err';
       $('btnFtms').textContent='Reconnecter le rameur'; $('btnFtms').disabled=false;
     });
+    journal('Connexion GATT…');
     const serveur = await devFtms.gatt.connect();
-    const svc = await serveur.getPrimaryService(SVC_FTMS);
+    journal('GATT connecté · recherche du service FTMS (0x1826)…');
+    let svc;
+    try{ svc = await serveur.getPrimaryService(SVC_FTMS); }
+    catch(eSvc){
+      journal('Service FTMS introuvable sur cet appareil ('+decrisErreur(eSvc)+'). Mauvais appareil choisi, ou machine non-FTMS.','err');
+      return;
+    }
+    journal('Service FTMS trouvé · caractéristique Rower Data (0x2AD1)…');
     const car = await svc.getCharacteristic(CHR_ROWER);
+    journal('Caractéristique trouvée · activation des notifications…');
     await car.startNotifications();
     car.addEventListener('characteristicvaluechanged', e=>pipelineRameur(tRel(), e.target.value));
     $('puceFtms').textContent=`rameur : ${devFtms.name||'connecté'}`; $('puceFtms').className='puce ok';
     $('btnFtms').disabled=true;
-    journal('Notifications Rower Data (0x2AD1) actives','ok');
+    journal('Notifications Rower Data actives — tire un coup de rame pour vérifier','ok');
     garderEcranAllume();
-  } catch(e){ journal('Connexion rameur : '+e.message,'err'); }
+  } catch(e){ journal('Connexion rameur : '+decrisErreur(e),'err'); }
 }
 async function connecterHr(){
+  if (!navigator.bluetooth){ journal('Web Bluetooth absent de ce navigateur','err'); return; }
   try{
-    devHr = await navigator.bluetooth.requestDevice({ filters:[{services:[SVC_HR]}] });
+    devHr = await navigator.bluetooth.requestDevice({ filters:[{services:[SVC_HR]}], optionalServices:[SVC_HR] });
+  } catch(e1){
+    if (e1 && /cancel|annul/i.test(e1.message||'')){ journal('Sélection annulée'); return; }
+    journal('Recherche FC filtrée échouée ('+decrisErreur(e1)+') → repli : scan large');
+    try{ devHr = await navigator.bluetooth.requestDevice({ acceptAllDevices:true, optionalServices:[SVC_HR] }); }
+    catch(e2){ journal('Connexion FC : '+decrisErreur(e2),'err'); return; }
+  }
+  try{
     devHr.addEventListener('gattserverdisconnected',()=>{
       journal('⚠ Ceinture FC déconnectée','err');
       $('puceHr').textContent='FC : déconnectée'; $('puceHr').className='puce err'; $('btnHr').disabled=false;
@@ -426,7 +463,7 @@ async function connecterHr(){
     $('puceHr').textContent=`FC : ${devHr.name||'connectée'}`; $('puceHr').className='puce ok';
     $('btnHr').disabled=true;
     journal('Notifications Heart Rate (0x2A37) actives','ok');
-  } catch(e){ journal('Connexion FC : '+e.message,'err'); }
+  } catch(e){ journal('Connexion FC : '+decrisErreur(e),'err'); }
 }
 
 /* ===================== Enregistrement / export ===================== */
