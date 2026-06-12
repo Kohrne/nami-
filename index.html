@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nami · Spike FTMS — phase 1</title>
+<style>
+  :root{
+    --nuit:#101D30; --indigo:#213A5C; --panneau:#18293F; --liseret:#2C4565;
+    --ecume:#EDE4D3; --ecume-2:#B9AE9A; --teal:#2D6E8E; --teal-vif:#4A9BBF;
+    --ember:#E08A3C; --rouge:#C84B31;
+    --mono:ui-monospace,'SF Mono','Cascadia Mono',Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--nuit);color:var(--ecume);font-family:var(--sans);padding:14px 16px 40px;font-size:15px}
+  h1{font-size:17px;font-weight:600;letter-spacing:.04em}
+  h1 .kanji{color:var(--teal-vif);margin-right:8px;font-weight:400}
+  h1 small{color:var(--ecume-2);font-weight:400;font-size:12px;letter-spacing:.12em;text-transform:uppercase;margin-left:10px}
+  header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:14px}
+  .puce{font-size:12px;padding:3px 10px;border:1px solid var(--liseret);border-radius:99px;color:var(--ecume-2);font-family:var(--mono)}
+  .puce.ok{border-color:var(--teal);color:var(--teal-vif)}
+  .puce.rec{border-color:var(--ember);color:var(--ember)}
+  .puce.err{border-color:var(--rouge);color:var(--rouge)}
+
+  .barre{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+  button{font:600 13px var(--sans);color:var(--ecume);background:var(--indigo);
+    border:1px solid var(--liseret);border-radius:8px;padding:9px 14px;cursor:pointer}
+  button:hover{border-color:var(--teal)}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  button.principal{background:var(--teal);border-color:var(--teal)}
+  button.attention{background:transparent;border-color:var(--ember);color:var(--ember)}
+  button.attention.actif{background:var(--ember);color:var(--nuit)}
+  label.ctl{font-size:12px;color:var(--ecume-2);display:inline-flex;align-items:center;gap:6px}
+  select,input[type=file]{font:13px var(--mono);color:var(--ecume);background:var(--panneau);
+    border:1px solid var(--liseret);border-radius:6px;padding:6px}
+  input[type=range]{accent-color:var(--teal)}
+
+  #banniere{display:none;background:var(--rouge);color:var(--ecume);border-radius:8px;
+    padding:10px 14px;margin-bottom:14px;font-size:13px;line-height:1.5}
+
+  .tuiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:8px}
+  .tuile{background:var(--panneau);border:1px solid var(--liseret);border-radius:10px;padding:10px 12px 12px;position:relative}
+  .tuile .lbl{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ecume-2);margin-bottom:4px}
+  .tuile .val{font:600 34px/1.05 var(--mono);font-variant-numeric:tabular-nums}
+  .tuile .unite{font-size:12px;color:var(--ecume-2);margin-left:3px;font-family:var(--mono)}
+  .tuile.accent .val{color:var(--teal-vif)}
+  .tuile.fc .val{color:var(--ember)}
+  #coupPulse{position:absolute;top:10px;right:10px;width:9px;height:9px;border-radius:50%;
+    background:var(--teal-vif);opacity:0;transition:opacity .15s}
+  #coupPulse.on{opacity:1}
+
+  .derivees{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;margin-bottom:14px}
+  .derivees .tuile{background:transparent;border-style:dashed}
+  .derivees .val{font-size:24px}
+  .derivees .lbl::before{content:"jeu · ";color:var(--teal)}
+
+  .panneau{background:var(--panneau);border:1px solid var(--liseret);border-radius:10px;padding:12px 14px;margin-bottom:14px}
+  .panneau h2{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ecume-2);margin-bottom:10px}
+  canvas{width:100%;height:110px;display:block}
+
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:6px 16px;font:13px var(--mono)}
+  .stats div span{color:var(--ecume-2);display:block;font-size:10px;letter-spacing:.1em;text-transform:uppercase;font-family:var(--sans)}
+  .stats .alerte{color:var(--rouge)}
+
+  #journal,#trames{font:11.5px/1.6 var(--mono);max-height:230px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;color:var(--ecume-2)}
+  #trames .hex{color:var(--teal-vif)}
+  #trames .champ{color:var(--ecume)}
+  #trames .warn{color:var(--ember)}
+  #journal .err{color:var(--rouge)} #journal .ok{color:var(--teal-vif)}
+
+  details.aide{margin-top:18px;color:var(--ecume-2);font-size:13px;line-height:1.6}
+  details.aide summary{cursor:pointer;color:var(--ecume)}
+  details.aide code{font-family:var(--mono);color:var(--teal-vif)}
+  @media (prefers-reduced-motion: reduce){ #coupPulse{transition:none} }
+</style>
+</head>
+<body>
+
+<header>
+  <h1><span class="kanji">波</span>NAMI<small>Spike FTMS · phase 1</small></h1>
+  <span class="puce" id="puceFtms">rameur : déconnecté</span>
+  <span class="puce" id="puceHr">FC : —</span>
+  <span class="puce" id="puceRec">repos</span>
+</header>
+
+<div id="banniere"></div>
+
+<div class="barre">
+  <button class="principal" id="btnFtms">Connecter le rameur</button>
+  <button id="btnHr">Connecter la ceinture FC</button>
+  <button class="attention" id="btnRec">● Enregistrer</button>
+  <button id="btnExport" disabled>Exporter le JSON</button>
+  <label class="ctl">Replay <input type="file" id="fichierReplay" accept=".json"></label>
+  <label class="ctl">Vitesse
+    <select id="vitesseReplay"><option>1</option><option>2</option><option selected>4</option><option>8</option></select>×
+  </label>
+  <button id="btnReplay" disabled>▶ Rejouer</button>
+  <button id="btnSim">Simulateur</button>
+  <label class="ctl">Lissage
+    <select id="fenetreLissage"><option>3</option><option selected>4</option><option>5</option></select> coups
+  </label>
+</div>
+
+<div class="barre" id="barreSim" style="display:none">
+  <label class="ctl">SPM sim <input type="range" id="simSpm" min="16" max="32" value="24"> <b id="simSpmVal">24</b></label>
+  <label class="ctl">Split cible <input type="range" id="simSplit" min="95" max="180" value="125"> <b id="simSplitVal">2:05</b></label>
+  <label class="ctl">Irrégularité <input type="range" id="simBruit" min="0" max="20" value="4"> <b id="simBruitVal">±4 s</b></label>
+</div>
+
+<div class="tuiles">
+  <div class="tuile accent"><div class="lbl">Split instantané</div><div class="val" id="vSplit">—</div><div id="coupPulse"></div></div>
+  <div class="tuile accent"><div class="lbl">Split lissé</div><div class="val" id="vSplitLisse">—</div></div>
+  <div class="tuile"><div class="lbl">Cadence</div><div class="val" id="vSpm">—</div><span class="unite">spm</span></div>
+  <div class="tuile"><div class="lbl">Coups</div><div class="val" id="vCoups">—</div></div>
+  <div class="tuile"><div class="lbl">Puissance</div><div class="val" id="vWatts">—</div><span class="unite">W</span></div>
+  <div class="tuile"><div class="lbl">Distance</div><div class="val" id="vDist">—</div><span class="unite">m</span></div>
+  <div class="tuile"><div class="lbl">Temps</div><div class="val" id="vTemps">—</div></div>
+  <div class="tuile fc"><div class="lbl">Fréq. cardiaque</div><div class="val" id="vFc">—</div><span class="unite">bpm</span></div>
+</div>
+
+<div class="derivees">
+  <div class="tuile"><div class="lbl">Vitesse bateau</div><div class="val" id="vVitesse">—</div><span class="unite">m/s</span></div>
+  <div class="tuile"><div class="lbl">Position bateau</div><div class="val" id="vPosition">—</div><span class="unite">m</span></div>
+  <div class="tuile"><div class="lbl">Régularité (CV)</div><div class="val" id="vCv">—</div><span class="unite">%</span></div>
+</div>
+
+<div class="panneau">
+  <h2>Split — instantané (teal) vs lissé (écume) · ticks = coups</h2>
+  <canvas id="graphe" width="1200" height="110"></canvas>
+</div>
+
+<div class="panneau">
+  <h2>Caractérisation du flux</h2>
+  <div class="stats">
+    <div><span>Notifications</span><b id="sNb">0</b></div>
+    <div><span>Fréquence (10 s)</span><b id="sHz">—</b></div>
+    <div><span>Intervalle min/moy/max</span><b id="sIntervalle">—</b></div>
+    <div><span>Flags observés</span><b id="sFlags">—</b></div>
+    <div><span>Trames tronquées</span><b id="sTronquees">0</b></div>
+    <div><span>Longueur ≠ flags</span><b id="sMismatch">0</b></div>
+    <div><span>Pace invalides (0/0xFFFF)</span><b id="sPaceInv">0</b></div>
+    <div><span>Champs vus</span><b id="sChamps" style="font-size:11px">—</b></div>
+  </div>
+</div>
+
+<div class="panneau"><h2>Journal (connexions, événements)</h2><div id="journal"></div></div>
+<div class="panneau">
+  <h2>Trames brutes (150 dernières) <button id="btnPause" style="float:right;padding:2px 10px;font-size:11px">⏸ figer</button></h2>
+  <div id="trames"></div>
+</div>
+
+<details class="aide">
+  <summary>Mode d'emploi & prérequis</summary>
+  <p><b>Sur iPad</b> : Safari et Chrome n'ont pas Web Bluetooth (limite WebKit). Utiliser le navigateur <b>Bluefy – Web BLE Browser</b> (gratuit, App Store) et ouvrir cette page hébergée en HTTPS (GitHub Pages). L'export passe par la feuille de partage iOS (Enregistrer dans Fichiers, AirDrop…).</p>
+  <p><b>Sur ordinateur</b> : Chrome ou Edge, via <code>http://localhost</code> — par ex. <code>python3 -m http.server 8000</code> dans le dossier, puis <code>http://localhost:8000/</code>.</p>
+  <p><b>Protocole de la 1ʳᵉ session de caractérisation</b> (en ramant vraiment) : ① connecter, ② démarrer l'enregistrement, ③ ramer ~2 min régulier, ④ 30 s erratique volontaire, ⑤ s'arrêter 30 s sans toucher (observer pace/SPM à l'arrêt), ⑥ reprendre, ⑦ s'éloigner du rameur ou couper le moniteur pour provoquer une déconnexion, ⑧ exporter le JSON. Ce fichier devient la session de référence pour développer en replay.</p>
+  <p>Le format d'enregistrement (<code>nami-session-v1</code>) inclut les trames brutes (hex), le décodé, et un flux <code>derived</code> avec vitesse et position du bateau dans le temps — l'infra du futur ghost (Bloc 6).</p>
+</details>
+
+<script>
+'use strict';
+/* ===================== Constantes BLE ===================== */
+const SVC_FTMS = 0x1826, CHR_ROWER = 0x2ad1;
+const SVC_HR = 0x180d, CHR_HRM = 0x2a37;
+
+/* ===================== Décodage FTMS Rower Data (0x2AD1) =====================
+   Spec FTMS v1.0 §4.8. Piège : bit 0 « More Data » en logique inversée
+   (bit0 = 0 → Stroke Rate + Stroke Count PRÉSENTS). */
+function parseRowerData(dv){
+  if (dv.byteLength < 2) return { error:'frame_too_short', byteLength:dv.byteLength };
+  const flags = dv.getUint16(0,true); let o = 2; const d = {};
+  try {
+    if (!(flags & 0x0001)) { d.strokeRate = dv.getUint8(o)/2; o+=1;
+                             d.strokeCount = dv.getUint16(o,true); o+=2; }
+    if (flags & 0x0002){ d.avgStrokeRate = dv.getUint8(o)/2; o+=1; }
+    if (flags & 0x0004){ d.totalDistance = dv.getUint8(o)|(dv.getUint8(o+1)<<8)|(dv.getUint8(o+2)<<16); o+=3; }
+    if (flags & 0x0008){ d.instPace = dv.getUint16(o,true); o+=2; }   // s / 500 m
+    if (flags & 0x0010){ d.avgPace  = dv.getUint16(o,true); o+=2; }
+    if (flags & 0x0020){ d.instPower = dv.getInt16(o,true); o+=2; }
+    if (flags & 0x0040){ d.avgPower  = dv.getInt16(o,true); o+=2; }
+    if (flags & 0x0080){ d.resistance = dv.getInt16(o,true); o+=2; }
+    if (flags & 0x0100){ d.totalEnergy = dv.getUint16(o,true);
+                         d.energyPerHour = dv.getUint16(o+2,true);
+                         d.energyPerMin = dv.getUint8(o+4); o+=5; }
+    if (flags & 0x0200){ d.heartRate = dv.getUint8(o); o+=1; }
+    if (flags & 0x0400){ d.met = dv.getUint8(o)/10; o+=1; }
+    if (flags & 0x0800){ d.elapsedTime = dv.getUint16(o,true); o+=2; }
+    if (flags & 0x1000){ d.remainingTime = dv.getUint16(o,true); o+=2; }
+  } catch(e){
+    return { flags, fields:d, bytesRead:o, byteLength:dv.byteLength, truncated:true, lengthMismatch:true };
+  }
+  return { flags, fields:d, bytesRead:o, byteLength:dv.byteLength, lengthMismatch:o!==dv.byteLength };
+}
+
+/* Encodeur — utilisé par le simulateur (les trames simulées repassent
+   par le décodeur réel : test aller-retour permanent). */
+function encodeRowerData(f){
+  const buf = new ArrayBuffer(30), dv = new DataView(buf); let flags=0,o=2;
+  if (f.strokeRate!==undefined){ dv.setUint8(o,Math.round(f.strokeRate*2)); o+=1;
+                                 dv.setUint16(o,f.strokeCount&0xFFFF,true); o+=2; }
+  else flags|=0x0001;
+  if (f.totalDistance!==undefined){ flags|=0x0004;
+    dv.setUint8(o,f.totalDistance&0xFF); dv.setUint8(o+1,(f.totalDistance>>8)&0xFF);
+    dv.setUint8(o+2,(f.totalDistance>>16)&0xFF); o+=3; }
+  if (f.instPace!==undefined){ flags|=0x0008; dv.setUint16(o,f.instPace,true); o+=2; }
+  if (f.instPower!==undefined){ flags|=0x0020; dv.setInt16(o,f.instPower,true); o+=2; }
+  if (f.elapsedTime!==undefined){ flags|=0x0800; dv.setUint16(o,f.elapsedTime,true); o+=2; }
+  dv.setUint16(0,flags,true);
+  return new DataView(buf.slice(0,o));
+}
+
+/* Heart Rate Measurement (0x2A37) */
+function parseHeartRate(dv){
+  const flags = dv.getUint8(0); let o=1; const d={};
+  d.bpm = (flags&0x01) ? dv.getUint16(o,true) : dv.getUint8(o); o += (flags&0x01)?2:1;
+  if (flags&0x08){ d.energy = dv.getUint16(o,true); o+=2; }
+  if (flags&0x10){ d.rr=[]; while(o+1<dv.byteLength){ d.rr.push(Math.round(dv.getUint16(o,true)/1.024)); o+=2; } } // ms
+  return d;
+}
+
+/* ===================== État & utilitaires ===================== */
+const $ = id => document.getElementById(id);
+const etat = {
+  t0: performance.now(),
+  dernierCount: null, splits: [],            // fenêtre de splits (au coup)
+  splitLisse: null, vitesse: 0, position: 0, cv: null,
+  tDerniereTrame: null, intervalles: [], horodatages: [],
+  nb: 0, tronquees: 0, mismatch: 0, paceInv: 0,
+  flagsVus: new Set(), champsVus: new Set(),
+  enregistrement: null, replayEnCours: false, simEnCours: false,
+  tramesFigees: false,
+  histo: []                                   // pour le sparkline {t, inst, lisse, coup}
+};
+const fmtSplit = s => (s==null||!isFinite(s)) ? '—'
+  : `${Math.floor(s/60)}:${String(Math.round(s%60)).padStart(2,'0')}`;
+const fmtTemps = s => s==null ? '—'
+  : `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+const horodate = () => new Date().toLocaleTimeString('fr-FR');
+const tRel = () => Math.round(performance.now() - etat.t0);
+const hex = dv => { let a=[]; for(let i=0;i<dv.byteLength;i++) a.push(dv.getUint8(i).toString(16).padStart(2,'0')); return a.join(' '); };
+
+function journal(msg, cls=''){
+  const el=$('journal');
+  el.insertAdjacentHTML('afterbegin', `<div class="${cls}">[${horodate()}] ${msg}</div>`);
+  if (etat.enregistrement) etat.enregistrement.events.push({ t:tRel(), src:'meta', data:{ msg } });
+}
+
+/* ===================== Pipeline central =====================
+   Toutes les trames rameur (BLE réel, replay, simulateur) passent ici. */
+function pipelineRameur(tMs, dv){
+  const r = parseRowerData(dv);
+  etat.nb++;
+  if (r.truncated) etat.tronquees++;
+  else if (r.lengthMismatch) etat.mismatch++;
+  if (r.flags!==undefined) etat.flagsVus.add('0x'+r.flags.toString(16).padStart(4,'0'));
+  const f = r.fields || {};
+  Object.keys(f).forEach(k=>etat.champsVus.add(k));
+
+  // cadence des notifications
+  if (etat.tDerniereTrame!=null){
+    etat.intervalles.push(tMs-etat.tDerniereTrame);
+    if (etat.intervalles.length>500) etat.intervalles.shift();
+  }
+  etat.tDerniereTrame = tMs;
+  etat.horodatages.push(tMs);
+  while (etat.horodatages.length && tMs-etat.horodatages[0]>10000) etat.horodatages.shift();
+
+  // validité du pace
+  const paceValide = f.instPace!==undefined && f.instPace>0 && f.instPace<0xFFFF;
+  if (f.instPace!==undefined && !paceValide) etat.paceInv++;
+
+  // détection de coup : incrément du strokeCount (uint16, gérer le wrap)
+  let coup = false;
+  if (f.strokeCount!==undefined){
+    if (etat.dernierCount!=null){
+      let delta = f.strokeCount - etat.dernierCount;
+      if (delta < -60000) delta += 65536;            // wrap
+      if (delta > 0) coup = true;
+    }
+    etat.dernierCount = f.strokeCount;
+  }
+
+  // au coup : alimente la fenêtre de lissage
+  if (coup && paceValide){
+    const N = parseInt($('fenetreLissage').value,10);
+    etat.splits.push(f.instPace);
+    while (etat.splits.length > N) etat.splits.shift();
+    const m = etat.splits.reduce((a,b)=>a+b,0)/etat.splits.length;
+    etat.splitLisse = m;
+    if (etat.splits.length>=2){
+      const v = etat.splits.reduce((a,b)=>a+(b-m)*(b-m),0)/etat.splits.length;
+      etat.cv = Math.sqrt(v)/m*100;
+    }
+    $('coupPulse').classList.add('on');
+    setTimeout(()=>$('coupPulse').classList.remove('on'),120);
+  }
+
+  // dérivées jeu : vitesse = 500 / split lissé ; position = intégrale (infra ghost)
+  const dt = etat.intervalles.length ? Math.min(etat.intervalles[etat.intervalles.length-1],3000)/1000 : 0;
+  etat.vitesse = (etat.splitLisse && etat.splitLisse>0) ? 500/etat.splitLisse : 0;
+  if (f.instPace!==undefined && !paceValide) etat.vitesse = 0;   // pace 0/0xFFFF = machine à l'arrêt
+  etat.position += etat.vitesse * dt;
+
+  // enregistrement
+  if (etat.enregistrement && !etat.replayEnCours){
+    etat.enregistrement.events.push({ t:tMs, src:'ftms', raw:hex(dv), data:f,
+      ...(r.truncated?{truncated:true}:{}), ...(r.lengthMismatch&&!r.truncated?{lengthMismatch:true}:{}) });
+    etat.enregistrement.events.push({ t:tMs, src:'derived',
+      data:{ splitLisse:etat.splitLisse?+etat.splitLisse.toFixed(1):null,
+             vitesse:+etat.vitesse.toFixed(3), position:+etat.position.toFixed(2),
+             cv:etat.cv!=null?+etat.cv.toFixed(2):null, coup } });
+  }
+
+  majTuiles(f); majStats(); majTrames(dv,r,f);
+  etat.histo.push({ t:tMs, inst:paceValide?f.instPace:null, lisse:etat.splitLisse, coup });
+  while (etat.histo.length && tMs-etat.histo[0].t>120000) etat.histo.shift();
+}
+
+function pipelineFC(tMs, dv){
+  const d = parseHeartRate(dv);
+  $('vFc').textContent = d.bpm ?? '—';
+  if (etat.enregistrement && !etat.replayEnCours)
+    etat.enregistrement.events.push({ t:tMs, src:'hr', raw:hex(dv), data:d });
+}
+
+/* ===================== Affichage ===================== */
+function majTuiles(f){
+  if (f.instPace!==undefined) $('vSplit').textContent = (f.instPace>0&&f.instPace<0xFFFF)?fmtSplit(f.instPace):'—';
+  $('vSplitLisse').textContent = fmtSplit(etat.splitLisse);
+  if (f.strokeRate!==undefined) $('vSpm').textContent = f.strokeRate;
+  if (f.strokeCount!==undefined) $('vCoups').textContent = f.strokeCount;
+  if (f.instPower!==undefined) $('vWatts').textContent = f.instPower;
+  if (f.totalDistance!==undefined) $('vDist').textContent = f.totalDistance;
+  if (f.elapsedTime!==undefined) $('vTemps').textContent = fmtTemps(f.elapsedTime);
+  if (f.heartRate!==undefined) $('vFc').textContent = f.heartRate;
+  $('vVitesse').textContent = etat.vitesse?etat.vitesse.toFixed(2):'—';
+  $('vPosition').textContent = Math.round(etat.position);
+  $('vCv').textContent = etat.cv!=null?etat.cv.toFixed(1):'—';
+}
+function majStats(){
+  $('sNb').textContent = etat.nb;
+  $('sHz').textContent = etat.horodatages.length>1
+    ? (etat.horodatages.length/((etat.horodatages[etat.horodatages.length-1]-etat.horodatages[0])/1000)).toFixed(2)+' Hz' : '—';
+  if (etat.intervalles.length){
+    const mn=Math.min(...etat.intervalles), mx=Math.max(...etat.intervalles),
+          mo=etat.intervalles.reduce((a,b)=>a+b,0)/etat.intervalles.length;
+    $('sIntervalle').textContent = `${Math.round(mn)} / ${Math.round(mo)} / ${Math.round(mx)} ms`;
+  }
+  $('sFlags').textContent = [...etat.flagsVus].join(', ')||'—';
+  $('sTronquees').textContent = etat.tronquees;
+  $('sTronquees').className = etat.tronquees?'alerte':'';
+  $('sMismatch').textContent = etat.mismatch;
+  $('sMismatch').className = etat.mismatch?'alerte':'';
+  $('sPaceInv').textContent = etat.paceInv;
+  $('sChamps').textContent = [...etat.champsVus].join(' ')||'—';
+}
+function majTrames(dv,r,f){
+  if (etat.tramesFigees) return;
+  const el=$('trames');
+  const resume = Object.entries(f).map(([k,v])=>`${k}=${v}`).join(' ');
+  const warn = r.truncated?' <span class="warn">⚠ TRONQUÉE</span>':(r.lengthMismatch?' <span class="warn">⚠ longueur≠flags</span>':'');
+  el.insertAdjacentHTML('afterbegin',
+    `<div>[${horodate()}] <span class="hex">${hex(dv)}</span> <span class="champ">${resume}</span>${warn}</div>`);
+  while (el.children.length>150) el.lastChild.remove();
+}
+
+/* sparkline : split instantané (teal) + lissé (écume), ticks de coups */
+function dessineGraphe(){
+  const c=$('graphe'), ctx=c.getContext('2d');
+  ctx.clearRect(0,0,c.width,c.height);
+  const h=etat.histo; if (h.length<2){ requestAnimationFrame(dessineGraphe); return; }
+  const t1=h[h.length-1].t, t0=Math.max(h[0].t, t1-120000);
+  const vals=h.flatMap(p=>[p.inst,p.lisse]).filter(v=>v!=null);
+  if (!vals.length){ requestAnimationFrame(dessineGraphe); return; }
+  const lo=Math.min(...vals)-5, hi=Math.max(...vals)+5;
+  const X=t=>(t-t0)/(t1-t0||1)*c.width, Y=v=>c.height-(v-lo)/(hi-lo||1)*c.height;
+  const trace=(cle,couleur,ep)=>{ ctx.strokeStyle=couleur; ctx.lineWidth=ep; ctx.beginPath(); let prem=true;
+    for (const p of h){ if (p[cle]==null){ prem=true; continue; }
+      if (prem){ ctx.moveTo(X(p.t),Y(p[cle])); prem=false; } else ctx.lineTo(X(p.t),Y(p[cle])); }
+    ctx.stroke(); };
+  trace('inst','#2D6E8E',1.2); trace('lisse','#EDE4D3',2);
+  ctx.fillStyle='#4A9BBF';
+  for (const p of h) if (p.coup) ctx.fillRect(X(p.t)-1, c.height-6, 2, 6);
+  ctx.fillStyle='#B9AE9A'; ctx.font='10px monospace';
+  ctx.fillText(fmtSplit(hi-5),4,12); ctx.fillText(fmtSplit(lo+5),4,c.height-4);
+  requestAnimationFrame(dessineGraphe);
+}
+requestAnimationFrame(dessineGraphe);
+
+/* ===================== Connexions BLE ===================== */
+let devFtms=null, devHr=null;
+async function connecterFtms(){
+  try{
+    devFtms = await navigator.bluetooth.requestDevice({
+      filters:[{services:[SVC_FTMS]}], optionalServices:[SVC_FTMS] });
+    journal(`Appareil choisi : ${devFtms.name||'(sans nom)'}`,'ok');
+    devFtms.addEventListener('gattserverdisconnected',()=>{
+      journal('⚠ Rameur DÉCONNECTÉ (événement gattserverdisconnected)','err');
+      $('puceFtms').textContent='rameur : déconnecté'; $('puceFtms').className='puce err';
+      $('btnFtms').textContent='Reconnecter le rameur'; $('btnFtms').disabled=false;
+    });
+    const serveur = await devFtms.gatt.connect();
+    const svc = await serveur.getPrimaryService(SVC_FTMS);
+    const car = await svc.getCharacteristic(CHR_ROWER);
+    await car.startNotifications();
+    car.addEventListener('characteristicvaluechanged', e=>pipelineRameur(tRel(), e.target.value));
+    $('puceFtms').textContent=`rameur : ${devFtms.name||'connecté'}`; $('puceFtms').className='puce ok';
+    $('btnFtms').disabled=true;
+    journal('Notifications Rower Data (0x2AD1) actives','ok');
+    garderEcranAllume();
+  } catch(e){ journal('Connexion rameur : '+e.message,'err'); }
+}
+async function connecterHr(){
+  try{
+    devHr = await navigator.bluetooth.requestDevice({ filters:[{services:[SVC_HR]}] });
+    devHr.addEventListener('gattserverdisconnected',()=>{
+      journal('⚠ Ceinture FC déconnectée','err');
+      $('puceHr').textContent='FC : déconnectée'; $('puceHr').className='puce err'; $('btnHr').disabled=false;
+    });
+    const serveur = await devHr.gatt.connect();
+    const svc = await serveur.getPrimaryService(SVC_HR);
+    const car = await svc.getCharacteristic(CHR_HRM);
+    await car.startNotifications();
+    car.addEventListener('characteristicvaluechanged', e=>pipelineFC(tRel(), e.target.value));
+    $('puceHr').textContent=`FC : ${devHr.name||'connectée'}`; $('puceHr').className='puce ok';
+    $('btnHr').disabled=true;
+    journal('Notifications Heart Rate (0x2A37) actives','ok');
+  } catch(e){ journal('Connexion FC : '+e.message,'err'); }
+}
+
+/* ===================== Enregistrement / export ===================== */
+function basculerEnregistrement(){
+  if (!etat.enregistrement){
+    etat.enregistrement = { format:'nami-session-v1', startedAt:new Date().toISOString(),
+      device:{ ftms:devFtms?.name||(etat.simEnCours?'simulateur':null), hr:devHr?.name||null },
+      lissage:parseInt($('fenetreLissage').value,10), events:[] };
+    etat.position = 0;
+    $('btnRec').textContent='■ Arrêter'; $('btnRec').classList.add('actif');
+    $('puceRec').textContent='● enregistrement'; $('puceRec').className='puce rec';
+    journal('Enregistrement démarré','ok');
+  } else {
+    $('btnRec').textContent='● Enregistrer'; $('btnRec').classList.remove('actif');
+    $('puceRec').textContent=`session : ${etat.enregistrement.events.length} évts`; $('puceRec').className='puce';
+    $('btnExport').disabled=false;
+    journal(`Enregistrement arrêté (${etat.enregistrement.events.length} événements)`,'ok');
+  }
+}
+async function exporter(){
+  const s = etat.enregistrement; if (!s) return;
+  const nom = 'nami-session-'+s.startedAt.replace(/[:T]/g,'-').slice(0,19)+'.json';
+  const blob = new Blob([JSON.stringify(s)],{type:'application/json'});
+  // iPad/iOS : feuille de partage (AirDrop, Enregistrer dans Fichiers…)
+  const fichier = new File([blob], nom, {type:'application/json'});
+  if (navigator.canShare && navigator.canShare({files:[fichier]})){
+    try { await navigator.share({files:[fichier], title:nom}); journal('Partagé : '+nom,'ok'); return; }
+    catch(e){ if (e.name==='AbortError') return; }
+  }
+  // repli : téléchargement classique
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = nom; a.click();
+  URL.revokeObjectURL(a.href);
+  journal('Exporté : '+nom,'ok');
+}
+
+/* Maintien de l'écran allumé pendant la session (Wake Lock, si dispo) */
+let verrouEcran = null;
+async function garderEcranAllume(){
+  try {
+    if ('wakeLock' in navigator){
+      verrouEcran = await navigator.wakeLock.request('screen');
+      journal('Écran maintenu allumé (wake lock)','ok');
+    }
+  } catch(e){ /* non bloquant */ }
+}
+document.addEventListener('visibilitychange', ()=>{
+  if (document.visibilityState==='visible' && verrouEcran) garderEcranAllume();
+});
+
+/* ===================== Replay ===================== */
+let sessionChargee=null, replayTimer=null;
+function chargerReplay(ev){
+  const fichier = ev.target.files[0]; if (!fichier) return;
+  fichier.text().then(txt=>{
+    try{
+      sessionChargee = JSON.parse(txt);
+      if (sessionChargee.format!=='nami-session-v1') journal('⚠ Format inattendu : '+sessionChargee.format,'err');
+      const n = sessionChargee.events.filter(e=>e.src==='ftms').length;
+      journal(`Session chargée : ${n} trames rameur`,'ok');
+      $('btnReplay').disabled=false;
+    } catch(e){ journal('JSON illisible : '+e.message,'err'); }
+  });
+}
+function rejouer(){
+  if (!sessionChargee || etat.replayEnCours) return;
+  const x = parseInt($('vitesseReplay').value,10);
+  etat.replayEnCours = true; etat.position = 0; etat.splits = []; etat.splitLisse = null;
+  etat.dernierCount = null; etat.tDerniereTrame = null;
+  $('btnReplay').textContent='⏹ Stop'; journal(`Replay ×${x} démarré`,'ok');
+  const evts = sessionChargee.events.filter(e=>e.src==='ftms'||e.src==='hr');
+  const tBase = evts.length?evts[0].t:0, tDebut = performance.now();
+  let i = 0;
+  replayTimer = setInterval(()=>{           // un seul ordonnanceur : fiable sur mobile
+    const tVirtuel = (performance.now()-tDebut)*x;
+    while (i<evts.length && evts[i].t-tBase <= tVirtuel){
+      const e = evts[i++];
+      const dv = new DataView(Uint8Array.from(e.raw.split(' '),h=>parseInt(h,16)).buffer);
+      (e.src==='ftms'?pipelineRameur:pipelineFC)(tRel(), dv);
+    }
+    if (i>=evts.length) arreterReplay();
+  }, 50);
+}
+function arreterReplay(){
+  clearInterval(replayTimer); replayTimer=null;
+  if (etat.replayEnCours){ etat.replayEnCours=false; $('btnReplay').textContent='▶ Rejouer'; journal('Replay terminé','ok'); }
+}
+
+/* ===================== Simulateur =====================
+   Génère de vraies trames FTMS encodées → repassent par le décodeur réel. */
+let simInterval=null, sim={ count:0, dist:0, t0:0, phase:0 };
+function basculerSim(){
+  if (etat.simEnCours){
+    clearInterval(simInterval); etat.simEnCours=false;
+    $('btnSim').textContent='Simulateur'; $('barreSim').style.display='none';
+    journal('Simulateur arrêté','ok'); return;
+  }
+  etat.simEnCours=true; sim={ count:0, dist:0, t0:performance.now(), phase:0 };
+  $('btnSim').textContent='⏹ Stop simulateur'; $('barreSim').style.display='flex';
+  journal('Simulateur démarré (trames encodées FTMS → décodeur réel)','ok');
+  let dernierCoupT = performance.now(), splitCourant = parseInt($('simSplit').value,10);
+  simInterval = setInterval(()=>{
+    const maintenant = performance.now();
+    const spm = parseInt($('simSpm').value,10);
+    const cible = parseInt($('simSplit').value,10);
+    const bruit = parseInt($('simBruit').value,10);
+    if (maintenant-dernierCoupT >= 60000/spm){
+      dernierCoupT = maintenant; sim.count++;
+      splitCourant = cible + (Math.random()*2-1)*bruit;
+    }
+    sim.dist += (500/splitCourant) * 0.2;
+    const dv = encodeRowerData({
+      strokeRate:spm, strokeCount:sim.count,
+      totalDistance:Math.round(sim.dist),
+      instPace:Math.round(splitCourant),
+      instPower:Math.round(2.8/Math.pow(splitCourant/500,3)),
+      elapsedTime:Math.round((maintenant-sim.t0)/1000) });
+    pipelineRameur(tRel(), dv);
+  }, 200);  // 5 Hz, plausible pour du FTMS
+}
+
+/* ===================== Câblage UI ===================== */
+$('btnFtms').onclick = connecterFtms;
+$('btnHr').onclick = connecterHr;
+$('btnRec').onclick = basculerEnregistrement;
+$('btnExport').onclick = exporter;
+$('fichierReplay').onchange = chargerReplay;
+$('btnReplay').onclick = ()=> etat.replayEnCours ? arreterReplay() : rejouer();
+$('btnSim').onclick = basculerSim;
+$('btnPause').onclick = ()=>{ etat.tramesFigees=!etat.tramesFigees;
+  $('btnPause').textContent = etat.tramesFigees?'▶ reprendre':'⏸ figer'; };
+$('simSpm').oninput = e=>$('simSpmVal').textContent=e.target.value;
+$('simSplit').oninput = e=>$('simSplitVal').textContent=fmtSplit(+e.target.value);
+$('simBruit').oninput = e=>$('simBruitVal').textContent='±'+e.target.value+' s';
+
+if (!navigator.bluetooth){
+  const b=$('banniere'); b.style.display='block';
+  b.innerHTML = '<b>Web Bluetooth indisponible ici.</b> Ouvre cette page via <code>http://localhost</code> ou HTTPS dans Chrome/Edge. Le simulateur et le replay fonctionnent quand même.';
+  $('btnFtms').disabled=true; $('btnHr').disabled=true;
+}
+</script>
+</body>
+</html>
